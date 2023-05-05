@@ -37,22 +37,11 @@ class LambdaPPO( ReinforcementLearning ):
 			# Out-of-the-box update for the lagrangian multiplier
 			cost_batches = numpy.array_split(avg_cost, min(self.args.lambda_batch_number, len(avg_cost)))
 			cost_batch = [numpy.mean(b) for b in cost_batches]
-
 			for cost in cost_batch: self.update_lambda(cost)
 
-			# Lambda Clamp if necessary:
-			if self.args.test_2 == 0:
-				# Softplus, no normalization required
-				pass
-			elif self.args.test_2 == 1:
-				# Hard constraint >= 0
-				self.lagrangian_multiplier.data.clamp_(min=0)
-			elif self.args.test_2 == 2:
-				# Corsi et al.
-				self.lagrangian_multiplier.data.clamp_(min=0, max=(1-self.args.min_lambda_reward))
-			else:
-				# Invalid Setting 
-				raise ValueError
+			# Corsi et al. bound management
+			self.lagrangian_multiplier.data.clamp_(min=0, max=(1-self.args.min_lambda_reward))
+
 							
 
 		# Updates of the value functions
@@ -117,20 +106,9 @@ class LambdaPPO( ReinforcementLearning ):
 		# Commpute the KL-Divergence [http://joschu.net/blog/kl-approx.html]
 		with torch.no_grad(): approx_kl = ((ratio - 1) - log_ratio).mean()
 
-		if self.args.test_0 == 0:	
-			# Naive Normalization
-			pass
-		elif self.args.test_0 == 1:	
-			# Standardization
-			mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
-			mb_cost_advantages = (mb_cost_advantages - mb_cost_advantages.mean()) #/ (mb_cost_advantages.std() + 1e-8)
-		elif self.args.test_0 == 2:	
-			# Normalization
-			mb_advantages = (mb_advantages - mb_advantages.min()) / (mb_advantages.max() - mb_advantages.min())
-			mb_cost_advantages = (mb_cost_advantages - mb_cost_advantages.min()) / (mb_cost_advantages.max() - mb_cost_advantages.min())
-		else:
-			# Invalid Setting 
-			raise ValueError
+		# Stadradization of the advantages
+		mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+		mb_cost_advantages = (mb_cost_advantages - mb_cost_advantages.mean()) #/ (mb_cost_advantages.std() + 1e-8)
 									    
 		# Loss of the policy network (reward)
 		pg_rwloss1 = mb_advantages * ratio
@@ -142,17 +120,11 @@ class LambdaPPO( ReinforcementLearning ):
 		pg_closs2 = mb_cost_advantages * torch.clamp(ratio, 0.8, 1.2)
 		pg_closs = torch.min(pg_closs1, pg_closs2).mean()
 
-		if self.current_update <= self.args.start_train_lambda: 
-			# print( "DEBUG: ignore cost penalty before start-train-lambda")
-			pg_closs = 0
+		if self.current_update <= self.args.start_train_lambda: pg_closs = 0
 
-		reward_multiplier = 1
-		if self.args.test_2 == 2: reward_multiplier = (1 - self.lagrangian_multiplier.detach().numpy())
-
-		if self.args.test_2 == 0:
-			pg_loss = reward_multiplier * pg_rwloss - torch.nn.Softplus()(self.lagrangian_multiplier) * pg_closs + self.args.entropy_coeff * entropy.mean() 
-		else:
-			pg_loss = reward_multiplier * pg_rwloss - self.lagrangian_multiplier * pg_closs + self.args.entropy_coeff * entropy.mean() 
+		# Computation of the reward multiplier and update of the loss function
+		reward_multiplier = (1 - self.lagrangian_multiplier.detach().numpy())
+		pg_loss = reward_multiplier * pg_rwloss - self.lagrangian_multiplier * pg_closs + self.args.entropy_coeff * entropy.mean() 
 		
 		return -pg_loss, approx_kl
 	
@@ -164,23 +136,6 @@ class LambdaPPO( ReinforcementLearning ):
 	
 
 	def update_lambda( self, avg_epcost ):
-
-		if self.args.test_1 == 2: 
-			self._no_grad_lambda_update( avg_epcost )
-			return 0
-
-		if self.args.test_1 == 3:
-			proportional = (avg_epcost - self.args.cost_limit)
-			self.args.PID_integrative = max(self.args.PID_integrative + proportional, 0)
-			derivative = max(avg_epcost - self.args.PID_old_cost, 0)
-
-			Kp, Ki, Kd = 0.1, 0.0001, 0.5
-			new_value = ( Kp * proportional + Ki * self.args.PID_integrative + Kd * derivative )
-			self.lagrangian_multiplier = torch.nn.Parameter( torch.as_tensor(new_value), requires_grad=False )
-
-			return 0
-
-		#lambda_loss = -self.lagrangian_multiplier * torch.Tensor(avg_epcost - self.args.cost_limit).to(self.device)
 		lambda_loss = -self.lagrangian_multiplier * (avg_epcost - self.args.cost_limit)
 		self.lambda_optimizer.zero_grad()
 		lambda_loss.backward()

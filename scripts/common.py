@@ -50,22 +50,9 @@ class ReinforcementLearning( abc.ABC ):
 		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.args.learning_rate, eps=1e-5)
 		self.cost_critic_optimizer = torch.optim.Adam(self.cost_critic.parameters(), lr=self.args.learning_rate, eps=1e-5)
 
-		# Pedagogic implementation
-		if self.args.test_1 == 0:
-			# Adam			
-			self.lagrangian_multiplier = torch.nn.Parameter( torch.as_tensor(self.args.lambda_init), requires_grad=True )
-			self.lambda_optimizer = torch.optim.Adam( [self.lagrangian_multiplier], lr=self.args.lambda_learning_rate )
-		elif self.args.test_1 == 1:
-			# SGD
-			self.lagrangian_multiplier = torch.nn.Parameter( torch.as_tensor(self.args.lambda_init), requires_grad=True )
-			self.lambda_optimizer = torch.optim.SGD( [self.lagrangian_multiplier], lr=self.args.lambda_learning_rate )
-		elif self.args.test_1 == 2 or self.args.test_1 == 3:
-			# NO Grad
-			self.lagrangian_multiplier = torch.nn.Parameter( torch.as_tensor(self.args.lambda_init), requires_grad=False )
-			self.lambda_optimizer = None
-		else:
-			# Invalid Setting 
-			raise ValueError
+		# Initialize the optimizers for the lagrangian multiplier		
+		self.lagrangian_multiplier = torch.nn.Parameter( torch.as_tensor(self.args.lambda_init), requires_grad=True )
+		self.lambda_optimizer = torch.optim.Adam( [self.lagrangian_multiplier], lr=self.args.lambda_learning_rate )
 		
 
 	def main_loop( self ):
@@ -170,7 +157,7 @@ class ReinforcementLearning( abc.ABC ):
 
 		wandb_path = wandb.init(
 			name=None,
-			tags=["thesis-b"],
+			tags=["params"],
 			entity="dcorsi",
 			project="lambda-PPO",
 			mode="offline",
