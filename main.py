@@ -18,7 +18,7 @@ if __name__ == "__main__":
 	parser.add_argument("--num-envs", type=int, default=1)
 	
 	# PPO Hyperparams
-	parser.add_argument("--num-steps", type=int, default=2048)
+	parser.add_argument("--num-steps", type=int, default=4096)
 	parser.add_argument("--learning-rate", type=float, default=3e-4)
 	parser.add_argument("--gamma", type=float, default=0.99)
 	parser.add_argument("--gae-lambda", type=float, default=0.95)
