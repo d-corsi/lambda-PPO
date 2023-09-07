@@ -102,8 +102,12 @@ class ReinforcementLearning( abc.ABC ):
 
 				# Preprocess some data
 				done = numpy.logical_or(terminated, truncated)
+
 				if done[0]: cost = [infos["final_info"][idx]["cost"] for idx in range(self.args.num_envs)]
 				else: cost = infos["cost"]
+
+				# For standard gymansium code (no safety), add this line
+				# cost = [0 for _ in range(self.args.num_envs)]
 
 				# Store data in the memory buffer
 				memory_buffer.store_data( step, [state, actions, log_prob, reward, next_state, done, value] )
@@ -171,9 +175,9 @@ class ReinforcementLearning( abc.ABC ):
 		def thunk():
 
 			gymnasium_name = self.args.env_id[:-3] + "Gymnasium" + self.args.env_id[-3:]
+			# gymnasium_name = self.args.env_id
 
-			env = gymnasium.make( gymnasium_name, render_mode="rgb_array" )
-
+			env = gymnasium.make( gymnasium_name, render_mode=self.args.render_mode )
 			# env = gymnasium.wrappers.RecordVideo(env, video_folder="videos")
 			
 			env = gymnasium.wrappers.FlattenObservation(env)

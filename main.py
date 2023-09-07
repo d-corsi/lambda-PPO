@@ -6,6 +6,7 @@ def training( args ):
 	algo = LambdaPPO( args )
 	algo.main_loop()
     
+	
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
@@ -16,6 +17,7 @@ if __name__ == "__main__":
 	parser.add_argument("--seed", type=int, default=1)
 	parser.add_argument("--updates", type=int, default=500)
 	parser.add_argument("--num-envs", type=int, default=1)
+	parser.add_argument("--render-mode", type=str, default="rgb_array")
 	
 	# PPO Hyperparams
 	parser.add_argument("--num-steps", type=int, default=4096)
@@ -53,3 +55,12 @@ if __name__ == "__main__":
 	training( args )
 
 # python main.py --env-id SafetyPointGoal1Gymnasium-v0 --cost-limit 100
+
+# sudo mkdir /media/SharedPoint
+
+# sudo mount -t 9p -o trans=virtio share /media/SharedPoint -oversion=9p2000.L
+# share	/media/SharedPoint	9p	trans=virtio,version=9p2000.L,rw,_netdev,nofail	0	0
+# sudo chown -R $USER /media/SharedPoint
+
+# sudo mount -t virtiofs share /media/SharedPoint
+# share	/media/SharedPoint	virtiofs	rw,nofail	0	0
