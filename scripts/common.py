@@ -1,19 +1,7 @@
-import gymnasium, safety_gymnasium
-import torch, numpy, random
-import collections, abc, wandb, os, sys
 from scripts.utils import PolicyNetwork, DiscretePolicyNetwork, ValueNetwork, MemoryBuffer
-
-
-class NormalizeCost( gymnasium.wrappers.NormalizeReward ):
-    
-	def step(self, action):
-		obs, rews, terminateds, truncateds, infos = self.env.step(action)
-		infos["original_cost"] = infos["cost"]
-		cost = [infos["cost"]]		
-		self.returns = self.returns * self.gamma * (1 - terminateds) + cost
-		cost = self.normalize(cost)
-		infos["cost"] = cost[0]
-		return obs, rews, terminateds, truncateds, infos
+from scripts.wrappers import MultiCostWrapper
+import gymnasium, safety_gymnasium, torch, numpy, random
+import collections, abc, wandb, os, sys
 	
 
 class ReinforcementLearning( abc.ABC ):
@@ -33,26 +21,28 @@ class ReinforcementLearning( abc.ABC ):
 
 		#
 		# self.envs = safety_gymnasium.vector.make( self.args.env_id, render_mode=None, num_envs=self.args.num_envs )
-		self.envs = gymnasium.vector.AsyncVectorEnv( [self._make_env() for _ in range(self.args.num_envs) ] )
+		# self.envs = safety_gymnasium.vector.AsyncVectorEnv( [self._make_env() for _ in range(self.args.num_envs) ] )
+		# self.envs = safety_gymnasium.vector.SafetySyncVectorEnv( [self._make_env() for _ in range(self.args.num_envs) ] )
+		self.envs = gymnasium.vector.SyncVectorEnv( [self._make_env() for _ in range(self.args.num_envs) ] )
 
 		# Sanity check on the episodes for the circle environment
 		if self.args.env_id[-10:-4] == "Circle" and self.args.num_steps < 500: raise ValueError( "Increase the total number of steps" )
 		elif self.args.num_steps < 1000: raise ValueError( "Increase the total number of steps" )
 
-		# Initialize the neural networks
+		# Initialize the neural networks for actor and critic (reward-wise)
 		if isinstance(self.envs.single_action_space, gymnasium.spaces.Discrete): self.actor = DiscretePolicyNetwork( self.envs ).to(self.device)
 		else: self.actor = PolicyNetwork( self.envs ).to(self.device)
-		self.critic = ValueNetwork( self.envs ).to(self.device)
-		self.cost_critic = ValueNetwork( self.envs ).to(self.device)
-
-		# Initialize the optimizers
 		self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.args.learning_rate, eps=1e-5)
+		self.critic = ValueNetwork( self.envs ).to(self.device)
 		self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.args.learning_rate, eps=1e-5)
-		self.cost_critic_optimizer = torch.optim.Adam(self.cost_critic.parameters(), lr=self.args.learning_rate, eps=1e-5)
+		
+		# Initialize the neural networks for the critics (cost-wise)
+		self.cost_critics = [ValueNetwork( self.envs ).to(self.device) for _ in range(self.args.num_costs)]
+		self.cost_critic_optimizers = [torch.optim.Adam(self.cost_critics[i].parameters(), lr=self.args.learning_rate, eps=1e-5) for i in range(self.args.num_costs)]
 
 		# Initialize the optimizers for the lagrangian multiplier		
-		self.lagrangian_multiplier = torch.nn.Parameter( torch.as_tensor(self.args.lambda_init), requires_grad=True )
-		self.lambda_optimizer = torch.optim.Adam( [self.lagrangian_multiplier], lr=self.args.lambda_learning_rate )
+		self.lagrangian_multipliers = [torch.nn.Parameter( torch.as_tensor(self.args.lambda_init), requires_grad=True ) for _ in range(self.args.num_costs)]
+		self.lambda_optimizers = [torch.optim.Adam( [self.lagrangian_multipliers[i]], lr=self.args.lambda_learning_rate ) for i in range(self.args.num_costs)]
 		
 
 	def main_loop( self ):
@@ -61,7 +51,7 @@ class ReinforcementLearning( abc.ABC ):
 		if self.args.verbose > 0: self._activateWandB()
 
 		# Create the memory buffer object for the training loop
-		memory_buffer = MemoryBuffer(  self.args.num_steps, self.args.num_envs, self.envs, self.device )
+		memory_buffer = MemoryBuffer(  self.args.num_steps, self.args.num_envs, self.envs, self.device, self.args.num_costs )
 
 		# Initialize logging data
 		ep_costs = []
@@ -81,7 +71,6 @@ class ReinforcementLearning( abc.ABC ):
 			# Counters for the single agent
 			ep_costs.append([])
 			ep_rewards.append([])
-			ep_cost = 0
 
 			# Memory buffer init; policy gradient methods require the reset after each policy update
 			memory_buffer.clear()
@@ -94,48 +83,41 @@ class ReinforcementLearning( abc.ABC ):
 
 				with torch.no_grad():
 					actions, log_prob, _ = self.actor.get_action(state)
-					value = self.critic.forward(state).view(-1)
-					cost_value = self.cost_critic.forward(state).view(-1) 
+					value = self.critic.forward(state).view(-1).detach().numpy()
+					cost_value = [cost_critic.forward(state).view(-1).detach().numpy() for cost_critic in self.cost_critics]				
 
-				# next_state, reward, cost, terminated, truncated, infos = self.envs.step( actions.cpu().numpy() )
+				#
 				next_state, reward, terminated, truncated, infos = self.envs.step( actions.cpu().numpy() )
+				if "cost" in infos: cost = infos["cost"]
+				else: cost = numpy.array([final_info["cost"] for final_info in infos["final_info"]])
 
 				# Preprocess some data
 				done = numpy.logical_or(terminated, truncated)
-
-				if done[0]: cost = [infos["final_info"][idx]["cost"] for idx in range(self.args.num_envs)]
-				else: cost = infos["cost"]
-
-				# For standard gymansium code (no safety), add this line
-				# cost = [0 for _ in range(self.args.num_envs)]
 
 				# Store data in the memory buffer
 				memory_buffer.store_data( step, [state, actions, log_prob, reward, next_state, done, value] )
 				memory_buffer.store_cost( step, [cost, cost_value] )
 
-				# In this version we skip the last cost, it doesn't matter since it's only for debugging
-				# purpose but can miss a +/- 1. Notice that the value returned by the custom wrapper is 
-				# still correct.
-				# if not done[0]: ep_cost += infos["original_cost"][0]
-				ep_cost += cost
-
 				if done[0]: 
-					ep_rewards[-1].append( infos['final_info'][0]['episode']['r'][0] )
-					ep_costs[-1].append( ep_cost )
-					ep_cost = 0				
+					cumulative_reward = infos['final_info'][0]['custom_info']['tot_reward']
+					ep_rewards[-1].append( cumulative_reward )
+					cumulative_cost = infos['final_info'][0]['custom_info']["tot_costs"]
+					ep_costs[-1].append( cumulative_cost )
 
 				state = torch.Tensor(next_state).to(self.device)
 
 			# End Episode Logging
 			ep_rewards_queue.append( numpy.mean(ep_rewards[-1]) )
-			ep_costs_queue.append( numpy.mean(ep_costs[-1]) )
+			ep_costs_queue.append( numpy.mean(ep_costs[-1], axis=0) )
 
+			# Data logs
+			numpy_lambdas = [numpy.round(lag.detach().numpy(), 4) for lag in self.lagrangian_multipliers]
 			print( f"Update number {update:3d}", end="" )
 			print( f" reward: {ep_rewards_queue[-1]: 5.1f}", end="" )
 			print( f" (average {numpy.mean(ep_rewards_queue): 5.1f})", end="" )
-			print( f" cost: {int(ep_costs_queue[-1]):3d}", end="" )
-			print( f" (average {numpy.mean(ep_costs_queue): 3.1f})", end="" )
-			print( f" lambda: {self.lagrangian_multiplier.detach().numpy():5.4f}")
+			print( f" cost: {ep_costs_queue[-1]}", end="" )
+			print( f" (average {numpy.mean(ep_costs_queue, axis=0)})", end="" )
+			print( f" lambda: {numpy_lambdas}")
 
 			# Force output update (server only)
 			sys.stdout.flush()
@@ -174,20 +156,21 @@ class ReinforcementLearning( abc.ABC ):
 	def _make_env(self):
 		def thunk():
 
-			gymnasium_name = self.args.env_id[:-3] + "Gymnasium" + self.args.env_id[-3:]
-			# gymnasium_name = self.args.env_id
+			# safe_env = safety_gymnasium.make( self.args.env_id, render_mode=self.args.render_mode )
+			# safe_env = MultiCostWrapper( safe_env )
 
-			env = gymnasium.make( gymnasium_name, render_mode=self.args.render_mode )
-			# env = gymnasium.wrappers.RecordVideo(env, video_folder="videos")
+			env = gymnasium.make( self.args.env_id, render_mode=self.args.render_mode )
+			env = MultiCostWrapper( env )
 			
-			env = gymnasium.wrappers.FlattenObservation(env)
-			env = gymnasium.wrappers.RecordEpisodeStatistics(env)
-			env = gymnasium.wrappers.FlattenObservation(env)
-			env = gymnasium.wrappers.NormalizeObservation(env)
+			# 
+			# env = safety_gymnasium.wrappers.SafetyGymnasium2Gymnasium(safe_env)
+			# env = gymnasium.wrappers.FlattenObservation(env)
+			# env = gymnasium.wrappers.NormalizeObservation(env)
 			env = gymnasium.wrappers.NormalizeReward(env, gamma=self.args.gamma)
-			# env = NormalizeCost(env, gamma=self.args.gamma)
 
-			if not isinstance(env.action_space, gymnasium.spaces.Discrete): env = gymnasium.wrappers.ClipAction(env)
+			#
+			# safe_env = safety_gymnasium.wrappers.Gymnasium2SafetyGymnasium(env)
+			# if not isinstance(env.action_space, gymnasium.spaces.Discrete): env = gymnasium.wrappers.ClipAction(env)
 
 			return env
 

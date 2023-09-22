@@ -1,16 +1,17 @@
-import torch, numpy
+import torch, numpy, gymnasium
 from torch.distributions.normal import Normal
 from torch.distributions.categorical import Categorical
 
 
 class MemoryBuffer( ):
 	
-	def __init__( self, num_steps, num_envs, envs, device ):
+	def __init__( self, num_steps, num_envs, envs, device, num_costs ):
 
 		self.num_steps = num_steps
 		self.num_envs = num_envs
 		self.envs = envs
 		self.device = device
+		self.num_costs = num_costs
 
 		self.buffer = self._new_buffer()
 
@@ -31,9 +32,12 @@ class MemoryBuffer( ):
 
 
 	def store_cost( self, step, data ):
-		# Storing data in the memory buffer (L-PPO)
-		self.buffer["cost"][step] = torch.Tensor(data[0]).to(self.device)
-		self.buffer["cost_value"][step] = torch.Tensor(data[1]).to(self.device)
+		# Storing data in the memory buffer (step costs)
+		costs = numpy.array(data[0].tolist())
+		self.buffer["cost"][step] = torch.Tensor(costs).to(self.device)
+		# Storing data in the memory buffer (step cost critics)
+		cost_values = numpy.array(data[1]).T
+		self.buffer["cost_value"][step] = torch.Tensor(cost_values).to(self.device)
 			
 
 	def add_GAE_reward( self, args, value_network ):
@@ -52,43 +56,64 @@ class MemoryBuffer( ):
 		self.buffer["advantages"] = advantages
 
 
-	def add_GAE_cost( self, args, value_network ):
-		
+	def add_GAE_cost( self, args, value_networks ):
+		advantages = []
+		for i in range( len(value_networks) ):
+			advantage = self.compute_GAE_cost_single( self.buffer["cost"][:, :, i], self.buffer["cost_value"][:, :, i], args, value_networks[i]) 
+			advantages.append( advantage )
+
+		self.buffer["cost_advantages"] = advantages
+
+	
+	def compute_GAE_cost_single( self, cost_buffer, cost_value_buffer, args, value_network ):
+
 		with torch.no_grad():
-			advantages = torch.zeros( (self.buffer["cost"].shape[0]+1, self.buffer["cost"].shape[1]) ).to(self.device)
+			advantages = torch.zeros( (cost_buffer.shape[0]+1, cost_buffer.shape[1]) ).to(self.device)
 			values_next_state = value_network.forward(self.buffer["next_state"]).reshape(self.num_steps, -1)
 			
 			for t in reversed(range(self.num_steps)):
 				nextnonterminal = 1 - self.buffer["done"][t]
-				delta = self.buffer["cost"][t] + args.gamma * values_next_state[t] * nextnonterminal - self.buffer["cost_value"][t]
+				delta = cost_buffer[t] + args.gamma * values_next_state[t] * nextnonterminal - cost_value_buffer[t]
 				advantages[t] = delta + (args.gamma * args.gae_lambda * advantages[t+1] * nextnonterminal)
 
 			advantages = advantages[:-1, :]
-		
-		self.buffer["cost_advantages"] = advantages
 
+		return advantages
+	
 
 	def add_target_return( self ):
 		target_returns = self.buffer["advantages"] + self.buffer["value"]
 		self.buffer["target_returns"] = target_returns
 	
-	
+
 	def add_target_cost( self ):
-		target_returns = self.buffer["cost_advantages"] + self.buffer["cost_value"]
+		target_returns = []
+		for i in range( len(self.buffer["cost_advantages"]) ):
+			target_return = self.buffer["cost_advantages"][i] + self.buffer["cost_value"][:, :, i]
+			target_returns.append( target_return )
+
 		self.buffer["cost_target_returns"] = target_returns
 
 
 	def flatten_observation(self):
+		# Pre process L-PPO data	
+		buffer_cost, buffer_cost_advantages, buffer_cost_target_returns = [], [], []
+		for i in range( len(self.buffer["cost_target_returns"]) ):
+			buffer_cost.append( self.buffer["cost"][:, :, i].reshape(-1) )
+			buffer_cost_advantages.append( self.buffer["cost_advantages"][i].reshape(-1) )
+			buffer_cost_target_returns.append( self.buffer["cost_target_returns"][i].reshape(-1) )
+
 		# Flatten PPO data
 		self.buffer["state"] = self.buffer["state"].reshape( (-1,) + self.envs.single_observation_space.shape )
 		self.buffer["action"] = self.buffer["action"].reshape( (-1,) + self.envs.single_action_space.shape )
 		self.buffer["log_prob"] = self.buffer["log_prob"].reshape(-1)
 		self.buffer["advantages"] = self.buffer["advantages"].reshape(-1)
 		self.buffer["target_returns"] = self.buffer["target_returns"].reshape(-1)
+		
 		# Flatten L-PPO data
-		self.buffer["cost"] = self.buffer["cost"].reshape(-1)
-		self.buffer["cost_advantages"] = self.buffer["cost_advantages"].reshape(-1)
-		self.buffer["cost_target_returns"] = self.buffer["cost_target_returns"].reshape(-1)
+		self.buffer["cost"] = buffer_cost
+		self.buffer["cost_advantages"] = buffer_cost_advantages
+		self.buffer["cost_target_returns"] = buffer_cost_target_returns
 
 
 	def get_update_data( self ):
@@ -113,8 +138,8 @@ class MemoryBuffer( ):
 		}
 
 		# Add a key for each cost function
-		buffer["cost"] = torch.zeros( (self.num_steps, self.num_envs) ).to(self.device)
-		buffer["cost_value"] = torch.zeros( (self.num_steps, self.num_envs) ).to(self.device)
+		buffer["cost"] = torch.zeros( (self.num_steps, self.num_envs, self.num_costs) ).to(self.device)
+		buffer["cost_value"] = torch.zeros( (self.num_steps, self.num_envs, self.num_costs) ).to(self.device)
 
 		return buffer
 
@@ -230,3 +255,4 @@ class DiscretePolicyNetwork( torch.nn.Module ):
 		torch.nn.init.orthogonal_( layer.weight, std )
 		torch.nn.init.constant_( layer.bias, bias_const )
 		return layer
+

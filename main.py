@@ -13,6 +13,7 @@ if __name__ == "__main__":
 
 	# Basic Training Settings
 	parser.add_argument("--env-id", type=str, required=True)
+	parser.add_argument("--num-costs", type=int, default=1)
 	parser.add_argument("--verbose", type=int, default=0)
 	parser.add_argument("--seed", type=int, default=1)
 	parser.add_argument("--updates", type=int, default=500)
@@ -54,13 +55,6 @@ if __name__ == "__main__":
 
 	training( args )
 
-# python main.py --env-id SafetyPointGoal1Gymnasium-v0 --cost-limit 100
 
-# sudo mkdir /media/SharedPoint
-
-# sudo mount -t 9p -o trans=virtio share /media/SharedPoint -oversion=9p2000.L
-# share	/media/SharedPoint	9p	trans=virtio,version=9p2000.L,rw,_netdev,nofail	0	0
-# sudo chown -R $USER /media/SharedPoint
-
-# sudo mount -t virtiofs share /media/SharedPoint
-# share	/media/SharedPoint	virtiofs	rw,nofail	0	0
+# python main.py --env-id SafetyPointCircle0Gymnasium-v0 --cost-limit 25 --num-costs 2
+# python main.py --env-id SafetyPointCircle0Gymnasium-v0 --cost-limit 25 --num-costs 3 --num-envs 4
