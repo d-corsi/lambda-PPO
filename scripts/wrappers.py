@@ -33,7 +33,7 @@ class MultiCostWrapper( gymnasium.Wrapper ):
 		obs, reward, terminated, truncated, info = self.env.step(action)
 
 		# Fix for single cost 
-		if type(info["cost"]) is not list: info["cost"] = [info["cost"], 0, 0]
+		if type(info["cost"]) is not list: info["cost"] = [info["cost"], 0.0]
 		if self.cost_monitor is None: self.cost_monitor = [0.0 for _ in info["cost"]]
 
 		self.reward_monitor += reward

@@ -41,11 +41,14 @@ class LambdaPPO( ReinforcementLearning ):
 			for cost in cost_batch: self.update_lambda(cost)
 
 			# Corsi et al. bound management
-			for i in range(self.args.num_costs):
-				self.lagrangian_multipliers[i].data.clamp_(min=0)
-			# self.lagrangian_multiplier.data.clamp_(min=0, max=(1-self.args.min_lambda_reward))
+			for i in range(self.args.num_costs): self.lagrangian_multipliers[i].data.clamp_( min=0 )
 
-							
+			lambdas = numpy.array([lag.detach().numpy() for lag in self.lagrangian_multipliers])
+			if sum(lambdas) > 1 - self.args.min_lambda_reward: 
+				lambdas = self.softmax( lambdas, temperature=0.3, total=(1-self.args.min_lambda_reward) )
+			for i in range(self.args.num_costs): 
+				self.lagrangian_multipliers[i].data.clamp_( min=lambdas[i], max=lambdas[i])
+
 
 		# Updates of the value functions
 		for _ in range( self.args.value_epochs ):
@@ -165,4 +168,9 @@ class LambdaPPO( ReinforcementLearning ):
 		loss.backward()		
 		torch.nn.utils.clip_grad_norm_( network.parameters(), self.args.max_grad_norm )
 		optimizer.step()
+
+
+	"""Compute softmax values for each sets of scores in x."""
+	def softmax( self, x, temperature=1, total=1):
+		return (numpy.exp(x/temperature) / numpy.sum(numpy.exp(x/temperature), axis=0)) * total
 		

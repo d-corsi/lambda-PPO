@@ -1,8 +1,13 @@
 import argparse
 from scripts.lambda_ppo import LambdaPPO
+from scripts.welcome import print_welcome_message
+
+
+
 
 def training( args ):
 
+	print_welcome_message( args )
 	algo = LambdaPPO( args )
 	algo.main_loop()
     
@@ -46,7 +51,8 @@ if __name__ == "__main__":
 	# Parse the arguments and run the training
 	args = parser.parse_args()
 
-	# Special param for cost-limit means PPO
+	# -1 is special param for cost-limit, it means that we never start the training
+	# of the lagrangian paramters; we obtain a naive PPO
 	if args.cost_limit == -1: args.start_train_lambda = 1 
 
 	# Adjust additional paramters

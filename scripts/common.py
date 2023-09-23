@@ -20,14 +20,7 @@ class ReinforcementLearning( abc.ABC ):
 		self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 		#
-		# self.envs = safety_gymnasium.vector.make( self.args.env_id, render_mode=None, num_envs=self.args.num_envs )
-		# self.envs = safety_gymnasium.vector.AsyncVectorEnv( [self._make_env() for _ in range(self.args.num_envs) ] )
-		# self.envs = safety_gymnasium.vector.SafetySyncVectorEnv( [self._make_env() for _ in range(self.args.num_envs) ] )
-		self.envs = gymnasium.vector.SyncVectorEnv( [self._make_env() for _ in range(self.args.num_envs) ] )
-
-		# Sanity check on the episodes for the circle environment
-		if self.args.env_id[-10:-4] == "Circle" and self.args.num_steps < 500: raise ValueError( "Increase the total number of steps" )
-		elif self.args.num_steps < 1000: raise ValueError( "Increase the total number of steps" )
+		self.envs = gymnasium.vector.AsyncVectorEnv( [self._make_env() for _ in range(self.args.num_envs) ] )
 
 		# Initialize the neural networks for actor and critic (reward-wise)
 		if isinstance(self.envs.single_action_space, gymnasium.spaces.Discrete): self.actor = DiscretePolicyNetwork( self.envs ).to(self.device)
@@ -115,9 +108,9 @@ class ReinforcementLearning( abc.ABC ):
 			print( f"Update number {update:3d}", end="" )
 			print( f" reward: {ep_rewards_queue[-1]: 5.1f}", end="" )
 			print( f" (average {numpy.mean(ep_rewards_queue): 5.1f})", end="" )
-			print( f" cost: {ep_costs_queue[-1]}", end="" )
-			print( f" (average {numpy.mean(ep_costs_queue, axis=0)})", end="" )
-			print( f" lambda: {numpy_lambdas}")
+			print( f" cost: {[numpy.round(v, 1) for v in ep_costs_queue[-1]]}", end="" )
+			print( f" (average {[numpy.round(v, 1) for v in numpy.mean(ep_costs_queue, axis=0)]})", end="" )
+			print( f" lambda: {[numpy.round(v, 3) for v in numpy_lambdas]}")
 
 			# Force output update (server only)
 			sys.stdout.flush()
@@ -127,11 +120,9 @@ class ReinforcementLearning( abc.ABC ):
 
 			# Log on WandB if required
 			if self.args.verbose > 0:
-				record = {
-					"reward": float(numpy.mean(ep_rewards[-1])),
-					"cost": float(numpy.mean(ep_costs[-1])),
-					"lambda": float(self.lagrangian_multiplier.detach().numpy())
-				}
+				record = { "reward": float(numpy.mean(ep_rewards[-1])) }
+				for idx, cos in enumerate(ep_costs_queue[-1]): record[f"cost_{idx}"] = float(cos)
+				for idx, lam in enumerate(numpy_lambdas): record[f"lambda_{idx}"] = float(lam)
 				wandb.log(record)
 
 		# Finalize wandb at the end of the training loop
@@ -156,21 +147,16 @@ class ReinforcementLearning( abc.ABC ):
 	def _make_env(self):
 		def thunk():
 
-			# safe_env = safety_gymnasium.make( self.args.env_id, render_mode=self.args.render_mode )
-			# safe_env = MultiCostWrapper( safe_env )
-
 			env = gymnasium.make( self.args.env_id, render_mode=self.args.render_mode )
 			env = MultiCostWrapper( env )
 			
-			# 
-			# env = safety_gymnasium.wrappers.SafetyGymnasium2Gymnasium(safe_env)
-			# env = gymnasium.wrappers.FlattenObservation(env)
-			# env = gymnasium.wrappers.NormalizeObservation(env)
+			#
+			env = gymnasium.wrappers.FlattenObservation(env)
+			env = gymnasium.wrappers.NormalizeObservation(env)
 			env = gymnasium.wrappers.NormalizeReward(env, gamma=self.args.gamma)
 
 			#
-			# safe_env = safety_gymnasium.wrappers.Gymnasium2SafetyGymnasium(env)
-			# if not isinstance(env.action_space, gymnasium.spaces.Discrete): env = gymnasium.wrappers.ClipAction(env)
+			if not isinstance(env.action_space, gymnasium.spaces.Discrete): env = gymnasium.wrappers.ClipAction(env)
 
 			return env
 
