@@ -18,7 +18,7 @@ for {GREEN_COL}{args.updates} episodes{RESET_COL}." )
 	print( f"The number of {GREEN_COL}parallel environments is {args.num_envs}{RESET_COL}, each of \
 which will run for {GREEN_COL}{args.num_steps} steps{RESET_COL} before the \nupdate. Please \
 ensure that the selected enviornment can run for more steps before truncation (for \nexample \
-{UNDERLINE}'circle' requires at least 500 steps while 'goal', 'push' and 'locomotion' requires 1000 steps{RESET_COL})." )
+{UNDERLINE}'circle' requires at least 500 steps while 'goal', 'push' and 'locomotion' require 1000 steps{RESET_COL})." )
 	
 	print( f"\nYou indicate that your environment returns {CYAN_COL}{args.num_costs} cost \
 functions{RESET_COL} in the 'info' dictionary, \nplease check this value carefully. \

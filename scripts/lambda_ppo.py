@@ -1,6 +1,11 @@
 from scripts.common import ReinforcementLearning
 import numpy, torch
 
+
+"""
+	Initialization of all the neural networks, lagrangian multipliers, random
+	seeds, and additional variables.
+"""
 class LambdaPPO( ReinforcementLearning ):
     
 
@@ -170,7 +175,9 @@ class LambdaPPO( ReinforcementLearning ):
 		optimizer.step()
 
 
-	"""Compute softmax values for each sets of scores in x."""
+	"""
+		Compute softmax values for each sets of scores in x
+	"""
 	def softmax( self, x, temperature=1, total=1):
 		return (numpy.exp(x/temperature) / numpy.sum(numpy.exp(x/temperature), axis=0)) * total
 		

@@ -1,18 +1,12 @@
 import gymnasium
 
-class NormalizeCost( gymnasium.wrappers.NormalizeReward ):
-	
-	def step(self, action):
-		obs, rews, terminateds, truncateds, infos = self.env.step(action)
-		infos["original_cost"] = infos["cost"]
-		cost = [infos["cost"]]		
-		self.returns = self.returns * self.gamma * (1 - terminateds) + cost
-		cost = self.normalize(cost)
-		infos["cost"] = cost[0]
-		return obs, rews, terminateds, truncateds, infos
-	
 
+"""
+	Initialization of all the neural networks, lagrangian multipliers, random
+	seeds, and additional variables.
+"""
 class MultiCostWrapper( gymnasium.Wrapper ):
+	
 	
 	def __init__ ( self, env ):
 		super().__init__(env)
@@ -33,7 +27,7 @@ class MultiCostWrapper( gymnasium.Wrapper ):
 		obs, reward, terminated, truncated, info = self.env.step(action)
 
 		# Fix for single cost 
-		if type(info["cost"]) is not list: info["cost"] = [info["cost"], 0.0]
+		if type(info["cost"]) is not list: info["cost"] = [info["cost"]]
 		if self.cost_monitor is None: self.cost_monitor = [0.0 for _ in info["cost"]]
 
 		self.reward_monitor += reward
@@ -47,3 +41,7 @@ class MultiCostWrapper( gymnasium.Wrapper ):
 			}
 
 		return obs, reward, terminated, truncated, info
+	
+
+
+# class NormalizeCost( gymnasium.wrappers.NormalizeReward ):

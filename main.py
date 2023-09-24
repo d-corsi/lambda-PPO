@@ -3,10 +3,10 @@ from scripts.lambda_ppo import LambdaPPO
 from scripts.welcome import print_welcome_message
 
 
-
-
+""" 
+	Main function that prints the welcome message and runs the training process
+"""
 def training( args ):
-
 	print_welcome_message( args )
 	algo = LambdaPPO( args )
 	algo.main_loop()
@@ -20,7 +20,7 @@ if __name__ == "__main__":
 	parser.add_argument("--env-id", type=str, required=True)
 	parser.add_argument("--num-costs", type=int, default=1)
 	parser.add_argument("--verbose", type=int, default=0)
-	parser.add_argument("--seed", type=int, default=1)
+	parser.add_argument("--seed", type=int, default=None)
 	parser.add_argument("--updates", type=int, default=500)
 	parser.add_argument("--num-envs", type=int, default=1)
 	parser.add_argument("--render-mode", type=str, default="rgb_array")
@@ -59,8 +59,6 @@ if __name__ == "__main__":
 	args.num_steps = args.num_steps // args.num_envs
 	args.start_train_lambda = int(args.start_train_lambda * args.updates)
 
+	# Calling the main function to start the training
 	training( args )
 
-
-# python main.py --env-id SafetyPointCircle0Gymnasium-v0 --cost-limit 25 --num-costs 2
-# python main.py --env-id SafetyPointCircle0Gymnasium-v0 --cost-limit 25 --num-costs 3 --num-envs 4
