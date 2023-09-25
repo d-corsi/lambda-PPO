@@ -23,7 +23,7 @@ ensure that the selected enviornment can run for more steps before truncation (f
 	print( f"\nYou indicate that your environment returns {CYAN_COL}{args.num_costs} cost \
 functions{RESET_COL} in the 'info' dictionary, \nplease check this value carefully. \
 The {CYAN_COL}cost threshold is {args.cost_limit}{RESET_COL} (remember that -1 is a key \nvalue for 'no limit'). \
-The process of training the lagrangian multipliers starts afer {CYAN_COL}{args.start_train_lambda} updates.{RESET_COL}" )
+The process of training the lagrangian multipliers starts after {CYAN_COL}{args.start_train_lambda} updates.{RESET_COL}" )
 	
 	print( f"\nThe {YELLOW_COL}verbose level is {args.verbose}{RESET_COL} (where 0 means 'only print' and 1 \
 'save in WandB'). All the other \nhyperparamters can be found in the main file (i.e., 'main.py').")

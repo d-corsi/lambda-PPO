@@ -42,6 +42,3 @@ class MultiCostWrapper( gymnasium.Wrapper ):
 
 		return obs, reward, terminated, truncated, info
 	
-
-
-# class NormalizeCost( gymnasium.wrappers.NormalizeReward ):

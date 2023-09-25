@@ -169,7 +169,7 @@ class ReinforcementLearning( abc.ABC ):
 			sys.stdout.flush()
 
 			# Performing the training steps after <args.num_steps> 
-			self._train_networks( memory_buffer, ep_rewards[-1], ep_costs[-1] )
+			self._train_networks( memory_buffer, ep_costs[-1] )
 
 			# Log on WandB if required, i.e., only if verbose > 0
 			if self.args.verbose > 0:
@@ -211,7 +211,6 @@ class ReinforcementLearning( abc.ABC ):
 	
 	"""
 		Mehtod that setups the information to be stored on WandB
-		TODO: these information should be parametric, probably on a configuration file.
 	"""
 	def _activateWandB( self ):
 		self.args.total_steps = self.args.num_steps * self.args.num_envs 

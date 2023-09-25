@@ -3,6 +3,13 @@ from scripts.lambda_ppo import LambdaPPO
 from scripts.welcome import print_welcome_message
 
 
+#TODO: the information for wandb should be parametric, probably on a configuration file.
+#TODO: implement the cost normalization
+#TODO: test the cost function normalization
+#
+# class NormalizeCost( gymnasium.wrappers.NormalizeReward ):
+
+
 """ 
 	Main function that prints the welcome message and runs the training process
 """
@@ -10,8 +17,8 @@ def training( args ):
 	print_welcome_message( args )
 	algo = LambdaPPO( args )
 	algo.main_loop()
-    
-	
+
+
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
