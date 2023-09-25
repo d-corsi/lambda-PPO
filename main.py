@@ -3,7 +3,6 @@ from scripts.lambda_ppo import LambdaPPO
 from scripts.welcome import print_welcome_message
 
 
-#TODO: the information for wandb should be parametric, probably on a configuration file.
 #TODO: implement the cost normalization
 #TODO: test the cost function normalization
 #

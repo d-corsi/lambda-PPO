@@ -285,4 +285,4 @@ class LambdaPPO( ReinforcementLearning ):
 	"""
 	def softmax( self, x, temperature=1, total=1):
 		return (numpy.exp(x/temperature) / numpy.sum(numpy.exp(x/temperature), axis=0)) * total
-		
+

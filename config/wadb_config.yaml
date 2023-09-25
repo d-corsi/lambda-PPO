@@ -1,0 +1,22 @@
+#####################
+# Account Paramters #
+#####################
+
+# Account name
+entity: "dcorsi" 
+# Project name
+project: "lambda-PPO" 
+# Tags for the specific training
+tags: ["basic"] 
+
+
+#####################
+# Default Paramters #
+#####################
+
+# Name of the current training loop, if 'none' wandb will assign a random name
+name: None  
+# Send the data to wandb only after the trianing loop, this prevent network and performance overhead
+mode: "offline" 
+# If 'true' also the source code will be saved on wandb
+save_code: "false"

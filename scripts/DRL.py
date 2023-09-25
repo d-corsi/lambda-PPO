@@ -1,7 +1,7 @@
 from scripts.utils import PolicyNetwork, DiscretePolicyNetwork, ValueNetwork, MemoryBuffer
 from scripts.wrappers import MultiCostWrapper
 import gymnasium, safety_gymnasium, torch, numpy, random
-import collections, abc, wandb, os, sys
+import collections, abc, wandb, os, sys, yaml
 	
 
 """ 
@@ -87,8 +87,10 @@ class ReinforcementLearning( abc.ABC ):
 		for update in range(1, (self.args.updates+1)):
 
 			# Reset the environment before starting the process, remember that to propagate
-			# the state through the neural network we must first convert it into a tensor
-			state, _ = self.envs.reset( seed=self.args.seed )
+			# the state through the neural network we must first convert it into a tensor.
+			# We also add the update step to the seed to avoid overfitting while keeping
+			# the reproducibility
+			state, _ = self.envs.reset( seed=(self.args.seed+update) )
 			state = torch.Tensor(state).to(self.device)
 
 			# This support variable is useful for the delayed 'start train lambda', it his inherited
@@ -213,17 +215,35 @@ class ReinforcementLearning( abc.ABC ):
 		Mehtod that setups the information to be stored on WandB
 	"""
 	def _activateWandB( self ):
+
+		# Compute the toal-steps parameters, this value should be 
+		# de-normalized to abtain the real total, that is noe divided among
+		# all the parallel enviornments
 		self.args.total_steps = self.args.num_steps * self.args.num_envs 
 
+		# Extract the information from the configuration file
+		ymlfile = open("config/wadb_config.yaml", 'r')
+		job_config = yaml.safe_load(ymlfile)
+		yaml_entity = job_config["entity"]
+		yaml_project = job_config["project"]
+		yaml_tags = job_config["tags"]
+		yaml_name = None if job_config["name"] == "None" else job_config["name"]
+		yaml_mode = job_config["mode"]
+		yaml_save_code = job_config["save_code"] == "True"
+
+		# Initialize wandb with the correct paramters 
 		wandb_path = wandb.init(
-			name=None,
-			tags=["params"],
-			entity="dcorsi",
-			project="lambda-PPO",
-			mode="offline",
-			save_code=False,
+			name=yaml_name,
+			tags=yaml_tags,
+			entity=yaml_entity,
+			project=yaml_project,
+			mode=yaml_mode,
+			save_code=yaml_save_code,
 			config=self.args
 		)
+
+		# Store the record offile, they will be uploaded after the training if
+		# mode=="offline", otherwise they will be uploaded at runtime
 		self.wandb_path = os.path.split(wandb_path.dir)[0]
 
 
@@ -248,3 +268,5 @@ class ReinforcementLearning( abc.ABC ):
 	"""
 	@abc.abstractmethod
 	def _train_networks( self, memory_buffer ): raise NotImplementedError
+
+	

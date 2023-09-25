@@ -7,6 +7,10 @@ RESET_COL = '\033[0m'
 BOLD = '\033[1m'
 UNDERLINE = '\033[4m'
 
+
+"""
+	A simple, but fancy, welcome message :)
+"""
 def print_welcome_message( args ):
 	
 	print( f"\n{RED_COL}{BOLD}=====================================================================" )
@@ -31,3 +35,4 @@ The process of training the lagrangian multipliers starts after {CYAN_COL}{args.
 	print( f"\n{RED_COL}{BOLD}======================================" )
 	print( f"The training process will now start..." )
 	print( f"======================================{RESET_COL}\n" )
+
