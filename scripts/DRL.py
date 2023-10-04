@@ -222,7 +222,7 @@ class ReinforcementLearning( abc.ABC ):
 		self.args.total_steps = self.args.num_steps * self.args.num_envs 
 
 		# Extract the information from the configuration file
-		ymlfile = open("config/wadb_config.yaml", 'r')
+		ymlfile = open("config/wandb_config.yaml", 'r')
 		job_config = yaml.safe_load(ymlfile)
 		yaml_entity = job_config["entity"]
 		yaml_project = job_config["project"]
