@@ -52,7 +52,9 @@ class MultiCostWrapper( gymnasium.Wrapper ):
 
 		# Fix for single cost and initialization of the cost-monitor; this init
 		# is performed only once after each reset to match the number of cost functions
-		# of the enviornment
+		# of the enviornment. Fix also for the environments without 
+		# the cost (i.e., classical gymnasium like 'CartPole')
+		if not "cost" in info.keys(): info["cost"] = [0.0]
 		if type(info["cost"]) is not list: info["cost"] = [info["cost"]]
 		if self.cost_monitor is None: self.cost_monitor = [0.0 for _ in info["cost"]]
 
