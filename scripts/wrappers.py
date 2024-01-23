@@ -34,6 +34,13 @@ class MultiCostWrapper( gymnasium.Wrapper ):
 		# First recall the 'true' reset function of the environment
 		obs, info = self.env.reset( **kwargs )
 
+		# Fix for single cost and initialization of the cost-monitor; this init
+		# is performed only once after each reset to match the number of cost functions
+		# of the enviornment. Fix also for the environments without 
+		# the cost (i.e., classical gymnasium like 'CartPole')
+		if not "cost" in info.keys(): info["cost"] = [0.0]
+		if type(info["cost"]) is not list: info["cost"] = [info["cost"]]
+
 		# Reset of the monitoring variables and return the 'true' results
 		self.reward_monitor = 0
 		self.cost_monitor = None

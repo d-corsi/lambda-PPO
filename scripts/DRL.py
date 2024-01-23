@@ -136,8 +136,12 @@ class ReinforcementLearning( abc.ABC ):
 				# difference between 'terminated' and 'truncated'
 				done = numpy.logical_or(terminated, truncated)
 
+				# Minor fix for terminal states
+				for idx, d in enumerate(done): 
+					if d: next_state[idx] = infos["final_observation"][idx].copy()
+
 				# Store data in the memory buffer for the network update
-				memory_buffer.store_data( step, [state, actions, log_prob, reward, next_state, done, value] )
+				memory_buffer.store_data( step, [state, actions, log_prob, reward, next_state, terminated, value] )
 				memory_buffer.store_cost( step, [cost, cost_value] )
 
 				# If the first environment terminates we store the performance in term of cost
