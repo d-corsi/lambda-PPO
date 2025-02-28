@@ -1,6 +1,6 @@
 from scripts.utils import PolicyNetwork, DiscretePolicyNetwork, ValueNetwork, MemoryBuffer
 from scripts.wrappers import MultiCostWrapper
-import gymnasium, safety_gymnasium, torch, numpy, random
+import gymnasium, torch, numpy, random
 import collections, abc, wandb, os, sys, yaml
 	
 
@@ -40,7 +40,7 @@ class ReinforcementLearning( abc.ABC ):
 
 		# The training has been extensively tested in 'cpu' mode, but should
 		# work also in 'cuda' mode
-		self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		self.device = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 		# Generation of multiple environments for the vectorized approach. Multiple enviornment run
 		# in parallel for a faster data collection. It also guarantee a larger variety of data collected
@@ -137,8 +137,8 @@ class ReinforcementLearning( abc.ABC ):
 				done = numpy.logical_or(terminated, truncated)
 
 				# Minor fix for terminal states
-				for idx, d in enumerate(done): 
-					if d: next_state[idx] = infos["final_observation"][idx].copy()
+				# for idx, d in enumerate(done): 
+				# 	if d: next_state[idx] = infos["final_observation"][idx].copy()
 
 				# Store data in the memory buffer for the network update
 				memory_buffer.store_data( step, [state, actions, log_prob, reward, next_state, terminated, value] )
@@ -148,9 +148,9 @@ class ReinforcementLearning( abc.ABC ):
 				# and reward (n.b., recall that the first enviornment of the vectorized setup 
 				# is our 'monitor' for the performance log)
 				if done[0]: 
-					cumulative_reward = infos['final_info'][0]['custom_info']['tot_reward']
+					cumulative_reward = infos['custom_info']['tot_reward'][0]
 					ep_rewards[-1].append( cumulative_reward )
-					cumulative_cost = infos['final_info'][0]['custom_info']["tot_costs"]
+					cumulative_cost = infos['custom_info']["tot_costs"][0]
 					ep_costs[-1].append( cumulative_cost )
 
 				# Update the current states with the next states (standard
