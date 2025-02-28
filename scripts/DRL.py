@@ -40,7 +40,7 @@ class ReinforcementLearning( abc.ABC ):
 
 		# The training has been extensively tested in 'cpu' mode, but should
 		# work also in 'cuda' mode
-		self.device = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 		# Generation of multiple environments for the vectorized approach. Multiple enviornment run
 		# in parallel for a faster data collection. It also guarantee a larger variety of data collected
@@ -122,8 +122,8 @@ class ReinforcementLearning( abc.ABC ):
 				# faster computation 
 				with torch.no_grad():
 					actions, log_prob, _ = self.actor.get_action(state)
-					value = self.critic.forward(state).view(-1).detach().numpy()
-					cost_value = [cost_critic.forward(state).view(-1).detach().numpy() for cost_critic in self.cost_critics]				
+					value = self.critic.forward(state).view(-1).cpu().detach().numpy()
+					cost_value = [cost_critic.forward(state).view(-1).cpu().detach().numpy() for cost_critic in self.cost_critics]				
 
 				# Call the step function of the Gymnasium enviornment and extract the values for the (multiple)
 				# cost functions; the flag is necessary because in the last step the vectorized setup
